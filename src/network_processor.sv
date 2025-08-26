@@ -1,34 +1,43 @@
 module network_processor #(
-    parameter NR_WIDTH = 56, 
-    parameter NR_DEPTH = 16,
-    parameter NR_V_WIDTH = 20,
-    parameter NR_V_FRAC_WIDTH = 11,
-    parameter NR_I_WIDTH = 16, 
+    parameter NR_WIDTH           = 56, // width of a neuron word
+    parameter NR_DEPTH           = 16, // # of words in neuron SRAM
+    parameter NR_V_WIDTH         = 20, // width of each of the V and W parts in a neuron word
+    parameter NR_V_FRAC_WIDTH    = 11, // width of each of the fractional parts of V and W (fixed-point)
+    parameter NR_I_WIDTH         = 16, // width of I part in a neuron word
 
-    parameter SR_WIDTH = 64,
-    parameter SR_DEPTH = 16384,
-    parameter SR_SYN_WIDTH = 4,
+    parameter SR_WIDTH           = 64,      // width of a synapse word
+    parameter SR_DEPTH           = 16384,   // # of words in synapse SRAM
+    parameter SR_NUM_BANKS       = 64,      // # of banks in synapse SRAM
 
-    parameter MAX_NETWORK_TIME = 65536
+    parameter MAX_NETWORK_TIME   = 65536    // maximum simulation step
 )(
+    // * Input signals shared with the controller *
     input logic clk,
     input logic reset,
-    input logic start,
-    input logic input_occurred,
-    input logic [$clog2(SR_DEPTH)-1:0] input_index,
+    input logic                         initialize,  // signal to initialize the neurons and start processing
+    input logic                         input_occurred,
+    input logic [$clog2(SR_DEPTH)-1:0]  input_index,
 
-    output logic input_ack,
-    output logic output_occurred,
-    output logic [$clog2(NR_DEPTH)-1:0] output_index,
-    output logic [$clog2(MAX_NETWORK_TIME)-1:0] network_time
+    // * Output signals shared with the controller *
+    output logic                        can_receive_input,
+    output logic [$clog2(MAX_NETWORK_TIME)-1:0] network_time, // elapsed time in the simulated neural network
+
+    // * Output signals NOT shared with the controller *
+    output logic                        output_occurred,
+    output logic [$clog2(NR_DEPTH)-1:0] output_index
 );
+    localparam SR_SYN_WIDTH = SR_WIDTH / NR_DEPTH; // width of a synaptic weight in synapse words
+
+    // (1) wires carrying internal control signals
     logic [$clog2(NR_DEPTH)-1:0] c_neuron_index;
     logic [$clog2(SR_DEPTH)-1:0] c_synapse_index;
     logic c_neuron_we;
-    logic c_accumulate;
+    logic c_synapse_we;
+    logic c_init;
+    logic c_proc;
+    logic c_accu;
 
-
-    // (1) Controller (Finite State Machine)
+    // (2) Controller (Finite State Machine)
     network_controller #(
         .NR_WIDTH(NR_WIDTH),
         .NR_DEPTH(NR_DEPTH),
@@ -36,75 +45,88 @@ module network_processor #(
         .SR_DEPTH(SR_DEPTH),
         .MAX_NETWORK_TIME(MAX_NETWORK_TIME)
     ) controller (
+        // * Input signals shared with the network processor *
         .clk(clk),
         .reset(reset),
-        .start(start),
+        .initialize(initialize),
         .input_occurred(input_occurred),
         .input_index(input_index),
 
-        .input_ack(input_ack),
+        // * Output signals shared with the network processor *
+        .can_receive_input(can_receive_input),
+        .network_time(network_time),
 
+        // * Control Signals *
         .c_neuron_index(c_neuron_index),
         .c_synapse_index(c_synapse_index),
         .c_neuron_we(c_neuron_we),
-        .c_accumulate(c_accumulate),
-        
-        .network_time(network_time)
+        .c_synapse_we(c_synapse_we),
+        .c_init(c_init),
+        .c_proc(c_proc),
+        .c_accu(c_accu)
     );
 
-    // (2) SRAMs storing neuron states and synaptic weights
+    // (3) SRAMs storing neuron states and synaptic weights
 
-    logic [NR_WIDTH-1:0] neuron_read;
-    logic [NR_WIDTH-1:0] neuron_write_accu;
-    logic [NR_WIDTH-1:0] neuron_write_proc;
-    logic [NR_WIDTH-1:0] neuron_write;
-    logic [SR_WIDTH-1:0] synapse_read;
+    // (3-1) Multiplexing neuron read/write signals
+    logic [NR_WIDTH-1:0] neuron_rword;
+    logic [NR_WIDTH-1:0] neuron_wword_init;
+    logic [NR_WIDTH-1:0] neuron_wword_accu;
+    logic [NR_WIDTH-1:0] neuron_wword_proc;
+    logic [NR_WIDTH-1:0] neuron_wword;
+    logic [SR_WIDTH-1:0] synapse_rword;
+    logic [SR_WIDTH-1:0] synapse_wword;
 
-    assign neuron_write = (c_accumulate) ? neuron_write_accu : neuron_write_proc;
+    assign neuron_wword_init = { (20'(-65)<<11), (20'(-12)<<11), (16'b0) }; // Todo: resolve hardcoded reset value
+    assign neuron_wword = c_init ? neuron_wword_init :
+                          c_accu ? neuron_wword_accu :
+                          c_proc ? neuron_wword_proc : 0;
 
+    assign synapse_wword = 0; // Todo
+
+    // (3-2) Neuron SRAM (Single Bank)
     sram #(
         .WIDTH(NR_WIDTH),
         .DEPTH(NR_DEPTH),
-        .RESET_VALUE({(20'(-65)<<11),(20'(-12)<<11),(16'b0)}) // Todo: resolve hardcoded reset value
+        .NUM_BANKS(1)
     ) sram_neuron (
         .clk(clk),
-        .reset(reset),
+        .we(c_neuron_we),
         .addr(c_neuron_index),
-        .write_enable(c_neuron_we),
-        .word(neuron_read),
-        .write_word(neuron_write)
+        .wword(neuron_wword),
+        .rword(neuron_rword)
     );
 
+    // (3-3) Synapse SRAM (Multiple Banks)
     sram #(
         .WIDTH(SR_WIDTH),
         .DEPTH(SR_DEPTH),
-        .RESET_VALUE(0)
+        .NUM_BANKS(SR_NUM_BANKS)
     ) sram_synapse (
         .clk(clk),
-        .reset(reset),
+        .we(c_synapse_we),
         .addr(c_synapse_index),
-        .write_enable(0), // synapse SRAM is read-only for now.
-        .word(synapse_read),
-        .write_word(0) // synapse SRAM is read-only for now.
+        .wword(synapse_wword),
+        .rword(synapse_rword)
     );
 
-    // (3) the time-multiplexed neuron accumulator
+    // (4) Time-multiplexed Neuron Accumulator and Processor
 
-    logic [SR_SYN_WIDTH-1:0] synaptic_weight;
-    assign synaptic_weight = synapse_read[SR_SYN_WIDTH-1:0]; // Todo: bit selection according to c_neuron_index
+    // (4-1) Neuron Accumulator
+    logic [SR_SYN_WIDTH-1:0] weight;
+    assign weight = synapse_rword[(SR_SYN_WIDTH * c_neuron_index) +: SR_SYN_WIDTH];
 
     neuron_accumulator #(
         .NR_WIDTH(NR_WIDTH),
         .NR_I_WIDTH(NR_I_WIDTH),
         .SR_SYN_WIDTH(SR_SYN_WIDTH)
     ) neuron_accu (
-        .neuron_in(neuron_read),
-        .neuron_out(neuron_write_accu),
-        .syn_in(synaptic_weight)
+        .neuron_in(neuron_rword),
+        .neuron_out(neuron_wword_accu),
+        .syn_in(weight)
     );
 
-    // (4) the time-multiplexed neuron processor
-
+    // (4-2) Neuron Processor
     assign output_index = c_neuron_index;
 
     neuron_processor #(
@@ -113,8 +135,8 @@ module network_processor #(
         .NR_I_WIDTH(NR_I_WIDTH),
         .NR_V_FRAC_WIDTH(NR_V_FRAC_WIDTH)
     ) neuron_proc (
-        .neuron_in(neuron_read),
-        .neuron_out(neuron_write_proc),
+        .neuron_in(neuron_rword),
+        .neuron_out(neuron_wword_proc),
         .fire(output_occurred)
     );
 

@@ -1,4 +1,5 @@
 // Top module of a banked SRAM
+// ** Note: this SRAM module does not support global reset **
 
 module sram #(
     parameter WIDTH      = 32,       // Width (bits per word)
@@ -16,7 +17,11 @@ module sram #(
     // (1) Address Decoding
     logic [$clog2(NUM_BANKS)-1:0]   bank_select;  // index of bank
     logic [$clog2(BANK_DEPTH)-1:0]  bank_addr;    // address within bank
-    assign bank_select = addr[$clog2(DEPTH)-1:$clog2(BANK_DEPTH)];
+    if (DEPTH == BANK_DEPTH) begin // SRAM with single bank
+        assign bank_select = 0;
+    end else begin
+        assign bank_select = addr[$clog2(DEPTH)-1:$clog2(BANK_DEPTH)];
+    end
     assign bank_addr = addr[$clog2(BANK_DEPTH)-1:0];
 
     // (2) Route Read/Write of banks

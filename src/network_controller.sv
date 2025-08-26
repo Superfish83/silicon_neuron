@@ -1,9 +1,8 @@
-typedef enum logic [1:0] {
+typedef enum reg [1:0] {
     IDLE,
-    PROC, // The module is processing neuron dynamics
-            // (in time-multiplexed manner)
-    ACCU  // The module is processing synaptic input accumulation for neurons
-            // (in time-multiplexed manner)
+    INIT, // Initializing Neuron 
+    PROC, // processing neuron dynamics (IZH model)
+    ACCU  // processing synaptic input accumulation
 } c_state;
 
 module network_controller #(
@@ -13,104 +12,123 @@ module network_controller #(
     parameter SR_DEPTH = 16384,
     parameter MAX_NETWORK_TIME = 65536
 )(
+    // * Input signals shared with the network processor *
     input logic clk,
     input logic reset,
-    input logic start,
+    input logic                         initialize,  // signal to initialize the neurons and start processing
+    input logic                         input_occurred,
+    input logic [$clog2(SR_DEPTH)-1:0]  input_index,
 
-    input logic input_occurred, // 1: a spike occured in one of the presynaptic neuron, 0: no spike
-    input logic [$clog2(SR_DEPTH)-1:0] input_index, // the index of the presynaptic neuron
-    
-    output logic input_ack, // 1: the presynaptic spike input was been registered to the controller
-                            // 0: the controller was busy handling another spike input
+    // * Output signals shared with the network processor *
+    output logic                        can_receive_input,
+    output logic [$clog2(MAX_NETWORK_TIME)-1:0] network_time, // elapsed time in the simulated neural network
 
-    output logic [$clog2(NR_DEPTH)-1:0] c_neuron_index, 
-    // [control] SRAM access index
-    output logic [$clog2(SR_DEPTH)-1:0] c_synapse_index,
-    // [control] SRAM access index
-    output logic c_neuron_we, // [control] neuron SRAM write enable
-                              //         (synapse SRAM is read-only for now.)
-    output logic c_accumulate, // [control] 0: neuron updator is working
-                              //           1: neuron accumulator is working
-    output logic [$clog2(MAX_NETWORK_TIME)-1:0] network_time
-    // [control] elapsed time in the simulated neural network (지금까지 neuron들이 몇 step씩 update되었는지)
+    // * Control Signals *
+    output logic [$clog2(NR_DEPTH)-1:0] c_neuron_index,     // neuron SRAM access index
+    output logic [$clog2(SR_DEPTH)-1:0] c_synapse_index,    // synapse SRAM access index
+    output logic                        c_neuron_we,        // neuron SRAM write enable
+    output logic                        c_synapse_we,       // synapse SRAM write enable
+    output logic                        c_init,             // whether the state is INIT
+    output logic                        c_proc,             // whether the state is PROC
+    output logic                        c_accu              // whether the state is ACCU
 );
+    // (1-1) State register and its associated control signals
     c_state state;
+    assign c_init = (state == INIT);
+    assign c_proc = (state == PROC);
+    assign c_accu = (state == ACCU);
 
+    // (1-2) Network time counter which and its associated output signal
     reg [$clog2(MAX_NETWORK_TIME)-1:0] network_time_counter;
     assign network_time = network_time_counter;
-    assign c_accumulate = (state == ACCU);
 
-    reg phase; // 0: Read SRAM, 1: Write SRAM
+    // (1-3) Phase and SRAM access index registers, and their associated control signals
+    reg phase;                         // 0: Read SRAM, 1: Write SRAM
+    reg [$clog2(NR_DEPTH)-1:0] i_init; // time multiplexing index for neuron initialization
     reg [$clog2(NR_DEPTH)-1:0] i_proc; // time multiplexing index for neuron processing
     reg [$clog2(NR_DEPTH)-1:0] i_accu; // time multiplexing index for neuron accumulation
+    reg [$clog2(SR_DEPTH)-1:0] synapse_index;
+
+    assign c_neuron_index = (state == INIT) ? i_init :
+                            (state == PROC) ? i_proc :
+                            (state == ACCU) ? i_accu : 0;
+    assign c_synapse_index = synapse_index;
+    assign c_neuron_we = (state == PROC && phase == 1) || (state == INIT);
+    assign c_synapse_we = 0;
+
+    // (1-4) output signal whether the controller can receive input at the current clock
+    assign can_receive_input = (state == PROC && phase == 1) 
+        || ((state == ACCU && i_accu == (NR_DEPTH-1)) && (phase == 1));
 
 
-    always @(posedge clk, posedge reset) begin
+    // (2) State transition logic
+    always @(posedge clk or posedge reset) begin
         if (reset) begin
             state <= IDLE;
             network_time_counter <= 0;
 
-            input_ack <= 0;
-            c_neuron_we <= 0;
-        end
-        else if (state == IDLE && start) begin
-            state <= PROC;
             phase <= 0;
-
-            input_ack <= 0;
-            c_neuron_we <= 0;
+            i_init <= 0;
+            i_proc <= 0;
+            i_accu <= 0;
+            synapse_index <= 0;
         end
-        else if (state == PROC || state == ACCU) begin
-            // (1) Set write enable signal
-            c_neuron_we <= phase;
-            c_neuron_index <= (state == ACCU) ? i_accu : i_proc;
 
+        else begin
+            if (state == IDLE) begin
+                if (initialize == 1) begin
+                    state <= INIT;
 
-            // (2-1) Update phase
-            phase <= ~phase;
+                    i_init <= 0;
+                    phase <= 1;
+                end
+            end
 
-            // (2-2) Update time multiplexing index
-            if (state == PROC && phase==1) begin
-                i_proc <= i_proc + 1;
-                if (i_proc == (MAX_NETWORK_TIME-1)) begin
+            else if (state == INIT) begin
+                i_init <= i_init + 1;
+
+                if (i_init == (NR_DEPTH-1)) begin
+                    state <= PROC;
+
+                    i_proc <= 0;
+                    phase <= 0;
+                end
+            end
+
+            else if (state == PROC) begin
+                phase <= ~phase;
+
+                if (phase == 1) begin
+                    i_proc <= i_proc + 1;
+                end
+                
+                if (phase == 1 && i_proc == (NR_DEPTH-1)) begin
                     network_time_counter <= network_time_counter + 1;
                 end
-            end
-            if (state == ACCU && phase==1) begin
-                i_accu <= i_accu + 1;
-            end
 
-
-            // (3-1) state transition: PROC -> ACCU
-            if (state == PROC && input_occurred) begin
-                if(phase == 1) begin
-                    c_synapse_index <= input_index;
+                if (can_receive_input && input_occurred) begin
                     state <= ACCU;
+
+                    synapse_index <= input_index;
                     i_accu <= 0;
-                    input_ack <= 1;
-                end
-                else begin
-                    input_ack <= 0;
                 end
             end
 
-            // (3-2) state transition: ACCU -> PROC
-            else if (state == ACCU && i_accu == (MAX_NETWORK_TIME-1) && phase == 1) begin
-                if (input_occurred) begin
-                    c_synapse_index <= input_index;
-                    state <= PROC;
-                    input_ack <= 1;
+            else if (state == ACCU) begin
+                phase <= ~phase;
+
+                if (phase == 1) begin
+                    i_accu <= i_accu + 1;
                 end
-                else begin
+
+                if (can_receive_input && input_occurred) begin
+                    synapse_index <= input_index;
+                end
+
+                if (can_receive_input && !input_occurred) begin
                     state <= PROC;
-                    input_ack <= 0;
                 end
             end
-            
-            else begin
-                input_ack <= 0;
-            end
-            
         end
     end
     

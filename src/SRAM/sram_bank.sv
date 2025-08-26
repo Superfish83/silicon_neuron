@@ -14,7 +14,9 @@ module sram_bank #(
         if (we) begin
             memory[addr] <= wword; // Write to SRAM
         end
-        rword <= memory[addr]; // Read from SRAM
+        else begin
+            rword <= memory[addr]; // Read from SRAM
+        end
     end
 
 endmodule

@@ -1,5 +1,4 @@
-module sram_testbench ();
-
+module tb_sram ();
     localparam WIDTH = 32;
     localparam DEPTH = 16384;
     localparam NUM_BANKS = 64;
