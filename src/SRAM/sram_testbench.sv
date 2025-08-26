@@ -1,53 +1,67 @@
 module sram_testbench ();
-    parameter WIDTH = 32;
-    parameter DEPTH = 256;
 
-    reg clk;
-    reg reset;
-    reg write_enable;
-    reg [$clog2(DEPTH)-1:0] addr;
-    reg signed [WIDTH-1:0] write_word;
-    wire signed [WIDTH-1:0] word;
+    localparam WIDTH = 32;
+    localparam DEPTH = 16384;
+    localparam NUM_BANKS = 64;
+
+    logic clk;
+    logic we;
+    logic [$clog2(DEPTH)-1:0] addr;
+    logic signed [WIDTH-1:0] wword;
+    logic signed [WIDTH-1:0] rword;
 
     sram #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH),
-        .RESET_VALUE(0)
+        .NUM_BANKS(NUM_BANKS)
     ) uut (
         .clk(clk),
-        .write_enable(write_enable),
+        .we(we),
         .addr(addr),
-        .write_word(write_word),
-        .word(word)
+        .wword(wword),
+        .rword(rword)
     );
 
     initial begin
-        write_enable = 0;
-        addr = 0;
-        write_word = 0;
-        reset = 1;
-
-        // Test writing to SRAM
-        #10;
-        reset = 0;
-        write_enable = 1;
-        addr = 5;
-        write_word = 42; // Write value 42 to address 5
+        we = 0; addr = 0;
+        wword = 0;
 
         #10;
-        // Test reading from SRAM
-        write_enable = 0;
-        addr = 5; // Read from address 5
+        we = 1; addr = 1;
+        wword = 42;
 
         #10;
-        addr = 0; // Read from address 0
+        we = 0; addr = 0;
 
         #10;
-        // Test reading from SRAM
-        addr = 5; // Read from address 5
-        #10;
+        we = 0; addr = 1;
 
-        $finish;
+        #10;
+        we = 0; addr = 257;
+
+        #10;
+        we = 1; addr = 257;
+        wword = 42;
+
+        #10;
+        we = 0; addr = 257;
+        wword = 7;
+
+        #10;
+        we = 0; addr = 1;
+        wword = 7;
+
+        #10;
+        we = 0; addr = 257;
+        wword = 7;
+        
+        #10;
+        we = 1; addr = 257;
+        wword = 7;
+
+        #10;
+        we = 0; addr = 257;
+        wword = 7;
     end
 
     always begin
