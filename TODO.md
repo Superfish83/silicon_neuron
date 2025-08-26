@@ -48,6 +48,9 @@ compile error가 해결이 안되면 verilog2012에서 내가 짠 것처럼 inte
 - 이름이 다소 길고 혼동되기 쉬워서, `neuron_update_module`, `neuron_input_module`의 모듈명을 각각 `neuron_processor`, `neuron_accumulator`로 변경함.
 - 기존 `IZH_neuron.sv` 모듈은 v, w를 내부 상태로 저장하고 뉴런 계산을 수행했는데, `neuron_processor.sv`는 time-multiplexing을 구현하며, v와 w가 외부 SRAM에 저장되므로 순수 combinational logic임. `neuron_accumulator.sv`도 마찬가지. SRAM 입출력 값의 multiplexing 등 제어는 `network_processor.sv`부분으로 옮겼음.
 - neuron 모듈의 MSB는 가장 왼쪽으로 하겠음. 또 v,w,I별로 해당하는 비트 영역을 쓰면:
-- `neuron[55:36]`: v
-- `neuron[35:16]`: w
-- `neuron[15:0]`: I
+
+(8.27 수정)
+
+- `neuron[47:28]`: v
+- `neuron[27:8]`: w
+- `neuron[7:0]`: I

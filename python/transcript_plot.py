@@ -7,7 +7,7 @@ def compare_plot():
     num_lines = 1600
     dt = 1/4 #ms
     T = np.arange(0, num_lines * dt, dt)
-    I = 8.0
+    I = 10.0
 
     V1 = get_v_from_f(T, dt, I)
     V2 = get_v_from_transcript(num_lines)
@@ -29,7 +29,7 @@ def get_v_from_f(T, dt, I):
     W = np.zeros_like(T)
 
     V[0] = -65.0
-    W[0] = -15.0
+    W[0] = -12.0
 
     for i in range(len(T)-1):
         I_t = I if i >= 10 else 0.0
@@ -40,7 +40,7 @@ def get_v_from_f(T, dt, I):
 
         if V[i+1] >= 32:
             V[i+1] = -65.0
-            W[i+1] += 5.0
+            W[i+1] += 8.0
 
     return V
 
@@ -48,11 +48,11 @@ def get_v_from_transcript(num_lines):
     count = 0
     v_list = []
 
-    with open('./software_test/transcript.txt', 'r') as f:
+    with open('./python/transcript.txt', 'r') as f:
         lines = f.readlines()
         for line in lines:
-            if line[0] == '#':
-                v_list.append(float(line[1:].strip()))
+            if line.startswith('# V: '):
+                v_list.append(float(line[5:].strip()))
                 count += 1
                 if count >= num_lines:
                     break

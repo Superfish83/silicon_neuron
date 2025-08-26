@@ -1,9 +1,9 @@
 module network_processor #(
-    parameter NR_WIDTH           = 56, // width of a neuron word
+    parameter NR_WIDTH           = 48, // width of a neuron word
     parameter NR_DEPTH           = 16, // # of words in neuron SRAM
     parameter NR_V_WIDTH         = 20, // width of each of the V and W parts in a neuron word
     parameter NR_V_FRAC_WIDTH    = 11, // width of each of the fractional parts of V and W (fixed-point)
-    parameter NR_I_WIDTH         = 16, // width of I part in a neuron word
+    parameter NR_I_WIDTH         = 8,  // width of I part in a neuron word
 
     parameter SR_WIDTH           = 64,      // width of a synapse word
     parameter SR_DEPTH           = 16384,   // # of words in synapse SRAM
@@ -15,11 +15,17 @@ module network_processor #(
     input logic clk,
     input logic reset,
     input logic                         initialize,  // signal to initialize the neurons and start processing
-    input logic                         input_occurred,
+    input logic                         input_occurred, // spike input
     input logic [$clog2(SR_DEPTH)-1:0]  input_index,
+
+    // * Input signals NOT shared with the controller *
+    input logic                         syn_write_occurred, // synapse SRAM write
+    input logic [$clog2(SR_DEPTH)-1:0]  syn_write_index, 
+    input logic [SR_WIDTH-1:0]          syn_write_wword,
 
     // * Output signals shared with the controller *
     output logic                        can_receive_input,
+    output logic                        can_update_synapse,
     output logic [$clog2(MAX_NETWORK_TIME)-1:0] network_time, // elapsed time in the simulated neural network
 
     // * Output signals NOT shared with the controller *
@@ -30,9 +36,8 @@ module network_processor #(
 
     // (1) wires carrying internal control signals
     logic [$clog2(NR_DEPTH)-1:0] c_neuron_index;
-    logic [$clog2(SR_DEPTH)-1:0] c_synapse_index;
+    logic [$clog2(SR_DEPTH)-1:0] c_syn_read_index;
     logic c_neuron_we;
-    logic c_synapse_we;
     logic c_init;
     logic c_proc;
     logic c_accu;
@@ -54,13 +59,13 @@ module network_processor #(
 
         // * Output signals shared with the network processor *
         .can_receive_input(can_receive_input),
+        .can_update_synapse(can_update_synapse),
         .network_time(network_time),
 
         // * Control Signals *
         .c_neuron_index(c_neuron_index),
-        .c_synapse_index(c_synapse_index),
+        .c_syn_read_index(c_syn_read_index),
         .c_neuron_we(c_neuron_we),
-        .c_synapse_we(c_synapse_we),
         .c_init(c_init),
         .c_proc(c_proc),
         .c_accu(c_accu)
@@ -74,15 +79,19 @@ module network_processor #(
     logic [NR_WIDTH-1:0] neuron_wword_accu;
     logic [NR_WIDTH-1:0] neuron_wword_proc;
     logic [NR_WIDTH-1:0] neuron_wword;
-    logic [SR_WIDTH-1:0] synapse_rword;
-    logic [SR_WIDTH-1:0] synapse_wword;
 
-    assign neuron_wword_init = { (20'(-65)<<11), (20'(-12)<<11), (16'b0) }; // Todo: resolve hardcoded reset value
+    assign neuron_wword_init = { (20'(-65)<<<11), (20'(-12)<<<11), (8'b0000_1010) }; // Todo: resolve hardcoded reset value
     assign neuron_wword = c_init ? neuron_wword_init :
                           c_accu ? neuron_wword_accu :
                           c_proc ? neuron_wword_proc : 0;
 
-    assign synapse_wword = 0; // Todo
+    logic [$clog2(SR_DEPTH)-1:0] synapse_index;
+    logic synapse_we;
+    logic [SR_WIDTH-1:0] synapse_rword;
+    logic [SR_WIDTH-1:0] synapse_wword;
+    assign synapse_we = (can_update_synapse && syn_write_occurred);
+    assign synapse_index = synapse_we ? syn_write_index : c_syn_read_index;
+    assign synapse_wword = syn_write_wword;
 
     // (3-2) Neuron SRAM (Single Bank)
     sram #(
@@ -104,8 +113,8 @@ module network_processor #(
         .NUM_BANKS(SR_NUM_BANKS)
     ) sram_synapse (
         .clk(clk),
-        .we(c_synapse_we),
-        .addr(c_synapse_index),
+        .we(synapse_we),
+        .addr(synapse_index),
         .wword(synapse_wword),
         .rword(synapse_rword)
     );

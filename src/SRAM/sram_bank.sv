@@ -10,12 +10,10 @@ module sram_bank #(
 );
     logic signed [WIDTH-1:0] memory [0:DEPTH-1]; // SRAM memory array
 
+    assign rword = memory[addr];
     always @(posedge clk) begin
         if (we) begin
             memory[addr] <= wword; // Write to SRAM
-        end
-        else begin
-            rword <= memory[addr]; // Read from SRAM
         end
     end
 
