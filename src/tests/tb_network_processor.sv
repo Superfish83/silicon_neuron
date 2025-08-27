@@ -71,15 +71,44 @@ initial begin
     initialize = 0;
     input_occurred = 0;
     input_index = 0;
+    syn_write_occurred = 0;
 
     #(CYCLE);
     reset = 0;
+    syn_write_occurred = 1;
+    syn_write_index = 0;
+    syn_write_wword = 64'hcccc_cccc_7777_77c7;
 
-    #(CYCLE*4);
+    /*
+    #(CYCLE);
+    //syn_write_index = 1;
+    //syn_write_wword = 64'h5555_5555_5555_5555;
+    */
+
+    #(CYCLE);
+    syn_write_occurred = 0;
+
+    #(CYCLE*10);
     initialize = 1;
     
     #(CYCLE);
     initialize = 0;
+    
+    #(CYCLE*15);
+    input_occurred = 1;
+    input_index = 0;
+
+    #(CYCLE);
+    input_occurred = 0;
+
+    /*
+    #(CYCLE*31);
+    input_occurred = 1;
+    input_index = 1;
+
+    #(CYCLE);
+    input_occurred = 0;
+    */
 end
 
 endmodule

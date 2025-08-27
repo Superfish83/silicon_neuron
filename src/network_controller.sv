@@ -53,11 +53,14 @@ module network_controller #(
                             (state == PROC) ? i_proc :
                             (state == ACCU) ? i_accu : 0;
     assign c_syn_read_index = syn_read_index;
-    assign c_neuron_we = (state == PROC && phase == 1) || (state == INIT);
+    assign c_neuron_we = (state == PROC && phase == 1) 
+                        || (state == ACCU && phase == 1)
+                        || (state == INIT);
 
     // (1-4) output signal whether the controller can receive input at the current clock
     assign can_receive_input = (state == PROC && phase == 1) 
-        || ((state == ACCU && i_accu == (NR_DEPTH-1)) && (phase == 1));
+        || ((state == ACCU && i_accu == (NR_DEPTH-1)) && (phase == 1))
+        || ((state == INIT && i_init == (NR_DEPTH-1)) && (phase == 1));
     assign can_update_synapse = (state == IDLE);
 
 
@@ -88,10 +91,19 @@ module network_controller #(
                 i_init <= i_init + 1;
 
                 if (i_init == (NR_DEPTH-1)) begin
-                    state <= PROC;
-
-                    i_proc <= 0;
                     phase <= 0;
+
+                    if (can_receive_input && input_occurred) begin
+                        state <= ACCU;
+
+                        syn_read_index <= input_index;
+                        i_accu <= 0;
+                    end
+                    else begin
+                        state <= PROC;
+
+                        i_proc <= 0;
+                    end
                 end
             end
 
@@ -127,6 +139,8 @@ module network_controller #(
 
                 if (can_receive_input && !input_occurred) begin
                     state <= PROC;
+                    
+                    i_proc <= 0;
                 end
             end
         end

@@ -8,14 +8,16 @@ module neuron_processor #(
     output logic [NR_WIDTH-1:0] neuron_out,
     output logic fire
 );
+    localparam constIMode = 0; // ** Constant current mode **
+
     logic signed [NR_V_WIDTH-1:0] v_old, v_new;
     logic signed [NR_V_WIDTH-1:0] w_old, w_new;
     logic signed [NR_I_WIDTH-1:0] I_old, I_new;
     logic signed [NR_V_WIDTH-1:0] I_extend;
 
     assign {v_old, w_old, I_old} = neuron_in;
-    assign I_extend = {I_old[7], I_old, 11'b0}; // Sign extend
-    assign I_new = I_old;//0; Todo FOR DEBUGGING
+    assign I_extend = {I_old[7], I_old, 11'b0}; // Sign extend + padding (I_old becomes the integer part of the fixed point)
+    assign I_new = constIMode ? I_old : 0;
     assign neuron_out = {v_new, w_new, I_new};
 
     always @(v_new) begin // Todo FOR DEBUGGING

@@ -80,7 +80,7 @@ module network_processor #(
     logic [NR_WIDTH-1:0] neuron_wword_proc;
     logic [NR_WIDTH-1:0] neuron_wword;
 
-    assign neuron_wword_init = { (20'(-65)<<<11), (20'(-12)<<<11), (8'b0000_1010) }; // Todo: resolve hardcoded reset value
+    assign neuron_wword_init = { (20'(-65)<<<11), (20'(-12)<<<11), (8'(0)) }; // Todo: replace hardcoded reset value
     assign neuron_wword = c_init ? neuron_wword_init :
                           c_accu ? neuron_wword_accu :
                           c_proc ? neuron_wword_proc : 0;
