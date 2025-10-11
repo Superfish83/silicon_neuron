@@ -5,6 +5,7 @@
 '''
 
 from ballsim import BallSim
+from ballsimbase import BallSimBase
 import numpy as np
 import pygame
 
@@ -66,7 +67,7 @@ class BallSimVis:
     def _draw_ball(self):
         ball_color = (255, 100, 100)
 
-        coord_2d = self._get_simsurf_coord(self.ballsim.ball_x)[:2]
+        coord_2d = self._get_simsurf_coord(self.ballsim.ball_pos)[:2]
         radius = self.ballsim.R * self.sim_scale
 
         # draw ball

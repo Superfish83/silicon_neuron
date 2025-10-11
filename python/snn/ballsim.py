@@ -6,200 +6,200 @@
 '''
 
 import numpy as np
+from ballsimbase import BallSimBase
+
+class BallSim_Motor:
+    '''
+        Motor neurons
+        The motor neurons receive spikes from the SNN controller,
+        calculates the position of 'motor', and
+        determines the resultant plate normal vector.
+        
+        Motor는 +x, -x, +y, -y 4개 위치에 하나씩 있으며 각각 2개의 
+        neuron(수축, 이완)과 연결되어 있음. (neuron 총 8개)
+        각 motor는 spike를 받으면 순간적인 충격을 받은 damped oscillator처럼 작동
+        (계산 편의를 위해 각 oscillator는 1kg으로 가정)
+
+        계산된 4개 motor의 위치로부터 평면의 normal vector를 구함.
+    '''
+    def __init__(self, STEPS_PER_SEC, PLATE_SIDE):
+        self.STEPS_PER_SEC = STEPS_PER_SEC
+        self.DT = 1.0 / STEPS_PER_SEC
+        self.MOTOR_COUNT = 4 # +x, -x, +y, -y
+        self.NEURON_COUNT = self.MOTOR_COUNT * 2
+
+        self.PLATE_SIDE = PLATE_SIDE # [m] the plate is square with this side length
+        pos = 0.8 * (PLATE_SIDE / 2)
+        
+        # motor state constants
+        self.MOTOR_POS_REST = np.array([
+            [ pos, 0, 0], # +x
+            [-pos, 0, 0], # -x
+            [0,  pos, 0], # +y
+            [0, -pos, 0]  # -y
+        ])
+        self.K = 3 # spring constant [N/m]
+        self.D = 3   # damping coefficient [N/(m/s)]
+        self.IMPULSE = 0.05 # impulse when a spike is received [N*s]
+        self.MAX_DEFLECTION = 0.2*self.PLATE_SIDE # maximum deflection of the motor from the rest position [m]
+
+        self.reset()
+
+    def reset(self):
+        self.motor_pos = np.copy(self.MOTOR_POS_REST) # motor position
+        self.motor_v_z = np.zeros(4) # motor velocity (z direction only)
+
+    '''
+        *** Motor step ***
+
+        입력: spike를 낸 motor neuron들의 인덱스 리스트
+            ex: [0, 2, 5, 7] -> +x 수축, +y 수축, -x 이완, -y 이완
+        출력: plate의 normal vector
+    '''
+    def step(self, spikes):
+        # (1) apply impulses from spikes
+        for neuron_idx in spikes:
+            motor_idx = neuron_idx // 2
+            is_contract = (neuron_idx % 2 == 0)
+            if is_contract:
+                self.motor_v_z[motor_idx] -= self.IMPULSE
+            else:
+                self.motor_v_z[motor_idx] += self.IMPULSE
+        
+        # (2) update motor positions using damped oscillator model
+        for i in range(self.MOTOR_COUNT):
+            # calculate forces
+            f_spring = -self.K * (self.motor_pos[i,2] - self.MOTOR_POS_REST[i,2]) # spring force
+            f_damp   = -self.D * self.motor_v_z[i] # damping force
+            f_total  = f_spring + f_damp
+
+            # update velocity and position
+            a = f_total
+            self.motor_v_z[i] += a * self.DT
+            self.motor_pos[i,2] += self.motor_v_z[i] * self.DT
+
+            # limit maximum deflection
+            if self.motor_pos[i,2] > self.MOTOR_POS_REST[i,2] + self.MAX_DEFLECTION:
+                self.motor_pos[i,2] = self.MOTOR_POS_REST[i,2] + self.MAX_DEFLECTION
+            elif self.motor_pos[i,2] < self.MOTOR_POS_REST[i,2] - self.MAX_DEFLECTION:
+                self.motor_pos[i,2] = self.MOTOR_POS_REST[i,2] - self.MAX_DEFLECTION
+
+        # (3) calculate plate normal vector from motor positions
+        v1 = self.motor_pos[1] - self.motor_pos[0]
+        v2 = self.motor_pos[3] - self.motor_pos[2]
+        n = np.cross(v1, v2)
+        n /= np.linalg.norm(n)
+
+        return n
 
 
-class BallSim:
+class BallSim_Sensor:
+    '''
+        Sensor neurons
+        If the ball passes over the sensor position, it fires a spike.
+
+        무작위로 100개의 센서를 판 위에 배치
+        센서는 공이 가까이에 있으면 spike를 내보냄.
+        거리에 따라 spike 빈도가 달라짐. (가까울수록 빈도 높음, 3단계로 구분)
+    '''
+    def __init__(self, N_SENSORS, PLATE_SIDE):
+        self.DIST1 = 0.005 # [m]
+        self.DIST2 = 0.01 # [m]
+        self.DIST3 = 0.02 # [m]
+        self.PERIOD1 = 2 # [time steps]
+        self.PERIOD2 = 4 # [time steps]
+        self.PERIOD3 = 8 # [time steps]
+        self.PLATE_SIDE = PLATE_SIDE # [m] the plate is square with this side length
+
+        self.reset_random(N_SENSORS, PLATE_SIDE)
+
+    def reset_random(self, n_sensors, plate_side):
+        self.counter = 0 # time step counter. For spike generation at different frequencies
+        self.SENSORS_POS = (np.random.rand(n_sensors, 2) - 0.5) * plate_side * 0.8
+
+    '''
+        *** Sensor step ***
+
+        입력: 공의 위치 (평면에 대해 projection한 2D 좌표)
+        출력: spike를 낸 센서들의 인덱스 리스트 (AER과 비슷한 형식??)
+            ex: [0, 3, 5, ..., 97]
+    '''
+    def step(self, ball_pos_on_plate):
+        
+        # check if the ball is over any sensor
+        dists = np.linalg.norm(self.SENSORS_POS - ball_pos_on_plate, axis=1)
+        
+        fired_sensors = []
+        for i in range(len(self.SENSORS_POS)):
+            if dists[i] < self.DIST1:
+                if self.counter % self.PERIOD1 == 0:
+                    fired_sensors.append(i)
+            elif dists[i] < self.DIST2:
+                if self.counter % self.PERIOD2 == 0:
+                    fired_sensors.append(i)
+            elif dists[i] < self.DIST3:
+                if self.counter % self.PERIOD3 == 0:
+                    fired_sensors.append(i)
+
+        # update counter
+        self.counter += 1
+        self.counter %= self.PERIOD3
+
+        return fired_sensors
+
+
+class BallSim(BallSimBase):
     '''
         Ball balancing simulator
-        (1) class parameters:
-        * p_dt: time step [s]
-        * p_g: gravitational acceleration [m/s^2]
-        * p_r: radius of the ball [m]
-        * p_m: mass of the ball [kg]
-        * p_mu: friction coefficient between the ball and the plate
-        * p_plate_side: length of a side of the square plate [m]
+        The physical simulation is implemented in the parent class BallSimBase.
 
-        (2) simulation variables:
-        * time: simulation time [s]
-        * num_steps
+        This class implements the input/output interface for SNN-based control.
+        (connect with Motor and Sensor)
 
-        (3) internal state variables:
-        * st_plate_n[3]: normal vector of the plate
-        * st_ball_x[3]: position of the ball [m]
-        * st_ball_v[3]: velocity of the ball [m/s]
-        * st_ball_w[3]: angular velocity of the ball [rad/s]
+        class parameters
+        * STEPS_PER_SEC: simulation steps per second [s^-1]
+        * M: mass of the ball [kg]
+
+        나머지 파라미터는 BallSimBase 클래스에서 default 값으로 초기화됨.
+        * M 범위: 0.001 ~ 0.03 [kg]
     '''
-    def __init__(self, DT=0.003, G=9.81, R=0.01, M=0.5, MU=0.1, PLATE_SIDE=0.2, verbose=False):
-        # (1) initialize class parameters
-        self.DT = DT
-        self.G = G
-        self.R = R
-        self.M = M
-        self.MU = MU
-        self.PLATE_SIDE = PLATE_SIDE
-        self.verbose = verbose
+    def __init__(self, STEPS_PER_SEC=100, M=0.01, verbose=False):
+        # (0) Initialize parent class
+        super().__init__(STEPS_PER_SEC=STEPS_PER_SEC, M=M)
 
-        # (2) initialize simulation variables
-        self.isRunning = False
-        self.time = 0.0
-        self.num_steps = 0
+        # (1) Initialize Motor and Sensor
+        self.motor = BallSim_Motor(STEPS_PER_SEC=STEPS_PER_SEC, PLATE_SIDE=self.PLATE_SIDE)
+        self.sensor = BallSim_Sensor(N_SENSORS=100, PLATE_SIDE=self.PLATE_SIDE)
 
-        # (3) initialize internal state variables
-        self.plate_n = np.array([0,0,1])  # unit vector
-        self.ball_x = np.zeros(3)      # [m]
-        self.ball_v = np.zeros(3)      # [m/s]
-        self.ball_w = np.zeros(3)      # [rad/s]
-
-        print("BallSim: initialized.")
         if verbose:
+            print("BallSim: initialized.")
             print(f"self.__dict__:\n{self.__dict__}")
 
-    def reset(self,
-              plate_n=np.zeros(3),
-              ball_x=np.zeros(3),
-              ball_v=np.zeros(3),
-              ball_w=np.zeros(3)):
-        self.isRunning = True
+    def reset_random(self):
+        super().reset_random()
+        self.motor.reset()
+        self.sensor.reset_random(n_sensors=100, plate_side=self.PLATE_SIDE)
 
-        # reset simulation variables
-        self.time = 0.0
-        self.num_steps = 0
-
-        # reset internal state variables
-        self.plate_n = plate_n
-        self.ball_x = ball_x
-        self.ball_v = ball_v
-        self.ball_w = ball_w
-
-        print("BallSim: reset complete.")
-        if self.verbose:
-            print(f"self.__dict__:\n{self.__dict__}")
-    
-    def reset_random(self,
-                     plate_tilt_range=(-0.3, 0.3),
-                     ball_x_range=(-0.05, 0.05),
-                     ball_v_range=(-1, 1)):
-        # (1) randomly set plate_n
-        tmp = np.random.uniform(plate_tilt_range[0], plate_tilt_range[1], size=2)
-        plate_n = np.array([tmp[0], tmp[1], np.sqrt(1 - tmp[0]**2 - tmp[1]**2)])
-
-        # (2) randomly set ball_x, ball_v
-        tmp = np.random.uniform(ball_x_range[0], ball_x_range[1], size=2)
-        ball_x = np.array([tmp[0], tmp[1], self.R])
-        ball_x += (self.R - np.dot(ball_x, plate_n)) * plate_n  # keep contact with the plate
-
-        tmp = np.random.uniform(ball_v_range[0], ball_v_range[1], size=2)
-        ball_v = np.array([tmp[0], tmp[1], 0])
-        ball_v -= np.dot(ball_v, plate_n) * plate_n  # make velocity parallel to the plate
-        
-        self.reset(
-            plate_n=plate_n,
-            ball_x=ball_x,
-            ball_v=ball_v,
-            ball_w=np.zeros(3)
-        )
-
-    def _get_forces_to_ball(self):
-        # (1) gravitational force
-        # f_g: gravitational force [N]
-        f_g = np.array([0, 0, -self.M * self.G])
-
-        # (2) normal force from the plate
-        # n: normal vector of the plate
-        n = self.plate_n
-        # f_n: normal force [N]
-        f_n = np.dot(-f_g, n) * n 
-        
-        # (3) frictional force
-        # v: velocity of the ball [m/s]
-        v = self.ball_v
-        # f_f: frictional force [N]
-        if np.linalg.norm(v) > 1e-6:
-            f_f = -self.MU * np.linalg.norm(f_n) * (v / np.linalg.norm(v)) 
-        else:
-            f_f = np.zeros(3)
-
-        # (4) total force
-        f_total = f_g + f_n + f_f  # [N]
-
-        return (f_total, f_g, f_n, f_f)
-    
-    def _get_force_torque(self):
-        f_total, f_g, f_n, f_f = self._get_forces_to_ball()
-
-        # r: position vector from the center of the ball to the contact point [m]
-        r = self.ball_x - np.dot(self.ball_x, self.plate_n) * self.plate_n
-        # tau: torque [N*m]
-        tau = np.cross(r, f_f)
-
-        return (f_total, tau)
-    
-    def _update_ball(self):
-        f, tau = self._get_force_torque()
-
-        # (1) update linear motion
-        # a: acceleration of the ball [m/s^2]
-        a = f / self.M
-        self.ball_v += a * self.DT
-        self.ball_v -= np.dot(self.ball_v, self.plate_n) * self.plate_n  # make velocity parallel to the plate
-        self.ball_x += self.ball_v * self.DT
-        self.ball_x += ((self.R-np.dot(self.plate_n, self.ball_x)) * self.plate_n)  # keep contact with the plate
-
-        # (2) update angular motion
-        # I: moment of inertia of the ball [kg*m^2]
-        I = (2/5) * self.M * self.R**2
-        # alpha: angular acceleration of the ball [rad/s^2]
-        alpha = tau / I
-        self.ball_w += alpha * self.DT
-        # (angular position is not tracked)
-
-    def _get_plate_vertices(self):
-        vertices = []
-        hs = self.PLATE_SIDE / 2 # half side
-        for x in [-hs, hs]:
-            for y in [-hs, hs]:
-                p = np.array([x, y, 0])
-                p -= np.dot(p, self.plate_n) * self.plate_n  # project onto the plate
-                vertices.append(p)
-        return vertices
-    
-    def _is_ball_on_plate(self):
-        vertices = self._get_plate_vertices()
-        xs = [v[0] for v in vertices]
-        ys = [v[1] for v in vertices]
-        if (min(xs) <= self.ball_x[0] <= max(xs)) \
-            and (min(ys) <= self.ball_x[1] <= max(ys)):
-            return True
-        else:
-            return False
-
-    # set plate normal vector into a new value (automatically normalized)
-    def set_plate_n(self, new_plate_n):
-        self.plate_n = new_plate_n / np.linalg.norm(new_plate_n)
-
-    def print_state(self):
-        print(f"Sim state at time {self.time:.3f}s (step #{self.num_steps}):")
-        print(f"  Plate orientation: {self.plate_n}")
-        print(f"  Ball position: {self.ball_x} [m]")
-        print(f"  Ball velocity: {self.ball_v} [m/s]")
-        print(f"  Ball angular velocity: {self.ball_w} [rad/s]")
 
     def step(self):
-        if not self.isRunning:
-            print("The simulation is not running. Please reset the simulation.")
-            return
+
+        ball_pos_proj = self._get_ball_pos_proj()
+        sensor_spike_list = self.sensor.step(ball_pos_proj)
+
+        ## SNN controller logic start ##
+
+        # make random motor spikes for testing
+        motor_spike_list = []
+        for i in range(self.motor.NEURON_COUNT):
+            if np.random.rand() < 0.3:
+                motor_spike_list.append(i)
         
-        self._update_ball()
+        ## SNN controller logic end ##
 
-        # update time
-        self.time += self.DT
-        self.num_steps += 1
+        self.plate_n = self.motor.step(motor_spike_list)
+        super().step()
 
-        if not self._is_ball_on_plate():
-            self.isRunning = False
-            print(f"The ball has fallen off the plate!")
-            print(f"  At time {self.time:.3f}s (step #{self.num_steps})")
-            print(f"  Ball position: {self.ball_x} [m]")
+
 
 
 if __name__ == "__main__":
