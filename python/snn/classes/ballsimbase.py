@@ -29,7 +29,7 @@ class BallSimBase:
         * stball_v[3]: velocity of the ball [m/s]
         * ball_w[3]: angular velocity of the ball [rad/s]
     '''
-    def __init__(self, STEPS_PER_SEC=100, G=9.81, R=0.01, M=0.01, MU=0.1, PLATE_SIDE=0.3, verbose=False):
+    def __init__(self, STEPS_PER_SEC, G=9.81, R=0.01, M=0.01, MU=0.1, PLATE_SIDE=0.3, verbose=False):
         # (1) initialize class parameters
         self.STEPS_PER_SEC = STEPS_PER_SEC
         self.DT = 1.0 / self.STEPS_PER_SEC

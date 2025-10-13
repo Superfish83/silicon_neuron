@@ -1,6 +1,6 @@
 '''
     2025 전국 대학생 AI 반도체 설계 경진대회 2차과제:
-    Ball balancing simulator
+    Ball balancing (Ball-Plate system) simulator
 
     최초작성자: 김연준
 '''
@@ -163,7 +163,7 @@ class BallSim(BallSimBase):
         나머지 파라미터는 BallSimBase 클래스에서 default 값으로 초기화됨.
         * M 범위: 0.001 ~ 0.03 [kg]
     '''
-    def __init__(self, STEPS_PER_SEC=100, M=0.01, verbose=False):
+    def __init__(self, STEPS_PER_SEC=1000, M=0.01, verbose=False):
         # (0) Initialize parent class
         super().__init__(STEPS_PER_SEC=STEPS_PER_SEC, M=M)
 
@@ -180,21 +180,18 @@ class BallSim(BallSimBase):
         self.motor.reset()
         self.sensor.reset_random(n_sensors=100, plate_side=self.PLATE_SIDE)
 
-
-    def step(self):
-
+    def get_sensory_spikes(self):
         ball_pos_proj = self._get_ball_pos_proj()
         sensor_spike_list = self.sensor.step(ball_pos_proj)
+        return sensor_spike_list
 
-        ## SNN controller logic start ##
+    def step(self, motor_spike_list):
 
-        # make random motor spikes for testing
-        motor_spike_list = []
-        for i in range(self.motor.NEURON_COUNT):
-            if np.random.rand() < 0.3:
-                motor_spike_list.append(i)
-        
-        ## SNN controller logic end ##
+        if motor_spike_list is None: # for testing without SNN
+            motor_spike_list = []
+            for i in range(self.motor.NEURON_COUNT):
+                if np.random.rand() < 0.3:
+                    motor_spike_list.append(i)
 
         self.plate_n = self.motor.step(motor_spike_list)
         super().step()
