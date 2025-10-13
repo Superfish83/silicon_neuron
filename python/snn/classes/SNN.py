@@ -46,9 +46,10 @@ class SNN:
         # neuron state variables
         self.motor_state = np.zeros((self.N_MOTORS, 2))            # motor neuron states: [V, W]
         self.accumulated_I = np.zeros(self.N_MOTORS)               # accumulated input current for motor neurons
+
         self.syn_weights = np.random.uniform(self.WEIGHT_MIN, self.WEIGHT_MAX,
                                              (self.N_SENSORS, self.N_MOTORS)) # synaptic weights
-        self.syn_fired = np.zeros(self.N_SENSORS) # synaptic fired state (1 if fired, else 0)
+        self.syn_fired = np.zeros((self.N_SENSORS, self.N_MOTORS)) # synaptic fired state (1 if fired, else 0)
 
         self.syn_weights_new = np.copy(self.syn_weights)            # for STDP weight update
         self.syn_weights_new_anti = np.copy(self.syn_weights)       # for anti-STDP weight update
@@ -65,7 +66,7 @@ class SNN:
         for i in sensory_spikes:
             for j in range(self.N_MOTORS):        
                 self.accumulated_I[j] += self.syn_weights[i][j]
-                self.syn_fired[i] = 1
+                self.syn_fired[i][j] = 1
 
         # (2) update motor neuron states using Izhikevich model
         motor_spikes = []
@@ -92,8 +93,9 @@ class SNN:
         delta_weights = np.zeros((self.N_SENSORS, self.N_MOTORS))
         for j in motor_spikes:
             for i in range(self.N_SENSORS):
-                if self.syn_fired[i] == 1:
+                if self.syn_fired[i][j] == 1:
                     delta_weights[i][j] += 0.5 # potentiation
+                    self.syn_fired[i][j] = 0 # reset fired state
                 else:
                     delta_weights[i][j] -= 0.25 # depression
 
@@ -109,10 +111,10 @@ class SNN:
 
         return motor_spikes
 
-    def apply_stdp(self):
+    def learn_stdp(self):
         self.syn_weights = np.clip(self.syn_weights_new, 0, 1)
         self.syn_weights_new = np.copy(self.syn_weights)
 
-    def apply_anti_stdp(self):
+    def learn_anti_stdp(self):
         self.syn_weights = np.clip(self.syn_weights_new_anti, 0, 1)
         self.syn_weights_new_anti = np.copy(self.syn_weights)

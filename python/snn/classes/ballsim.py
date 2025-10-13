@@ -103,9 +103,9 @@ class BallSim_Sensor:
         거리에 따라 spike 빈도가 달라짐. (가까울수록 빈도 높음, 3단계로 구분)
     '''
     def __init__(self, N_SENSORS, PLATE_SIDE):
-        self.DIST1 = 0.005 # [m]
-        self.DIST2 = 0.01 # [m]
-        self.DIST3 = 0.02 # [m]
+        self.DIST1 = 0.01 # [m]
+        self.DIST2 = 0.02 # [m]
+        self.DIST3 = 0.05 # [m]
         self.PERIOD1 = 2 # [time steps]
         self.PERIOD2 = 4 # [time steps]
         self.PERIOD3 = 8 # [time steps]

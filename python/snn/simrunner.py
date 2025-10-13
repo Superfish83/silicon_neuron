@@ -14,6 +14,15 @@ class SimRunner:
         # simulation visualizer
         self.vis = BallSimVis(VIS_FPS=VIS_FPS)
 
+    def update_snn(self):
+        SUCCESS_STEPS = 100
+        if self.sim.num_steps > 100:
+            self.snn.learn_stdp()
+            print("STDP weight update performed.")
+        else:
+            self.snn.learn_anti_stdp()
+            print("Anti-STDP weight update performed.")
+
     def step(self):
         # (1) get sensory spikes from simulation
         sensory_spikes = self.sim.get_sensory_spikes()
@@ -22,7 +31,7 @@ class SimRunner:
         motor_spikes = self.snn.step(sensory_spikes)
 
         # (3) simulation step: apply motor spikes to simulation
-        self.sim.step(None) #(motor_spikes)
+        self.sim.step(motor_spikes)
 
         # (4) visualization step
         self.vis.draw(self.sim)
@@ -38,12 +47,14 @@ class SimRunner:
             if cmd == "quit":
                 break
             elif cmd == "reset":
+                self.update_snn()
                 self.sim.reset_random()
 
             # (2) simulation step
             if self.sim.isRunning:
                 self.step()
             else:
+                self.update_snn()
                 self.sim.reset_random() # automatic reset
 
         self.vis.close()
