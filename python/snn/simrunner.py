@@ -2,6 +2,7 @@ from classes.ballsim import BallSim
 from classes.ballsim_vis import BallSimVis
 from classes.SNN import SNN
 
+
 class SimRunner:
     def __init__(self, STEPS_PER_SEC, VIS_FPS, M, N_SENSORS=100, verbose=False):
         # simulation
@@ -15,7 +16,7 @@ class SimRunner:
         self.vis = BallSimVis(VIS_FPS=VIS_FPS)
 
     def update_snn(self):
-        SUCCESS_STEPS = 150
+        SUCCESS_STEPS = 60
         if self.sim.num_steps > SUCCESS_STEPS:
             self.snn.learn_stdp()
             print("STDP weight update performed.")
@@ -55,14 +56,17 @@ class SimRunner:
                 self.step()
             else:
                 self.update_snn()
-                self.sim.reset_random() # automatic reset
+                self.sim.reset_random()  # automatic reset
 
         self.vis.close()
 
+
 if __name__ == "__main__":
-    runner = SimRunner(STEPS_PER_SEC=100,
-                       VIS_FPS=30,
-                       M=0.01,
-                       N_SENSORS=100,
-                       verbose=True)
+    runner = SimRunner(
+        STEPS_PER_SEC=100,
+        VIS_FPS=30,
+        M=0.01,
+        N_SENSORS=100,
+        verbose=True,
+    )
     runner.run()
