@@ -6,7 +6,7 @@
 '''
 
 import numpy as np
-from ballsimbase import BallSimBase
+from classes.ballsimbase import BallSimBase
 
 class BallSim_Motor:
     '''
@@ -163,7 +163,7 @@ class BallSim(BallSimBase):
         나머지 파라미터는 BallSimBase 클래스에서 default 값으로 초기화됨.
         * M 범위: 0.001 ~ 0.03 [kg]
     '''
-    def __init__(self, STEPS_PER_SEC=1000, M=0.01, verbose=False):
+    def __init__(self, STEPS_PER_SEC, M, verbose=False):
         # (0) Initialize parent class
         super().__init__(STEPS_PER_SEC=STEPS_PER_SEC, M=M)
 
@@ -195,17 +195,3 @@ class BallSim(BallSimBase):
 
         self.plate_n = self.motor.step(motor_spike_list)
         super().step()
-
-
-
-
-if __name__ == "__main__":
-    sim = BallSim(verbose=True)
-    sim.reset_random()
-
-    for _ in range(1000):
-        if not sim.isRunning:
-            break
-        if _ % 10 == 0:
-            sim.print_state()
-        sim.step()

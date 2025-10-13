@@ -206,15 +206,3 @@ class BallSimBase:
             print(f"The ball has fallen off the plate!")
             print(f"  At time {self.time:.3f}s (step #{self.num_steps})")
             print(f"  Ball position: {self.ball_pos} [m]")
-
-
-# if __name__ == "__main__":
-#     sim = BallSimBase(verbose=True)
-#     sim.reset_random()
-
-#     for _ in range(1000):
-#         if not sim.isRunning:
-#             break
-#         if _ % 10 == 0:
-#             sim.print_state()
-#         sim.step()

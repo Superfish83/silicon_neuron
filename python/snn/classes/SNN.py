@@ -26,11 +26,11 @@ class SNN:
         Neuron model: Izhikevich neuron model
     '''
 
-    def __init__(self, STEPS_PER_SEC, NUM_SENSORY=100, NUM_MOTOR=8):
+    def __init__(self, STEPS_PER_SEC, N_SENSORS=100, N_MOTORS=8):
         self.STEPS_PER_SEC = STEPS_PER_SEC
         self.DT = 1.0 / STEPS_PER_SEC
-        self.NUM_SENSORY = NUM_SENSORY
-        self.NUM_MOTOR = NUM_MOTOR
+        self.N_SENSORS = N_SENSORS
+        self.N_MOTORS = N_MOTORS
 
         self.V_RESET = -65.0 # reset potential after spike [mV]
         self.V_THRESH = 32.0 # spike threshold [mV]
@@ -44,11 +44,11 @@ class SNN:
 
     def reset(self):
         # neuron state variables
-        self.motor_state = np.zeros((self.NUM_MOTOR, 2))            # motor neuron states: [V, W]
-        self.accumulated_I = np.zeros(self.NUM_MOTOR)               # accumulated input current for motor neurons
+        self.motor_state = np.zeros((self.N_MOTORS, 2))            # motor neuron states: [V, W]
+        self.accumulated_I = np.zeros(self.N_MOTORS)               # accumulated input current for motor neurons
         self.syn_weights = np.random.uniform(self.WEIGHT_MIN, self.WEIGHT_MAX,
-                                             (self.NUM_SENSORY, self.NUM_MOTOR)) # synaptic weights
-        self.syn_fired = np.zeros(self.NUM_SENSORY) # synaptic fired state (1 if fired, else 0)
+                                             (self.N_SENSORS, self.N_MOTORS)) # synaptic weights
+        self.syn_fired = np.zeros(self.N_SENSORS) # synaptic fired state (1 if fired, else 0)
 
         self.syn_weights_new = np.copy(self.syn_weights)            # for STDP weight update
         self.syn_weights_new_anti = np.copy(self.syn_weights)       # for anti-STDP weight update
@@ -63,13 +63,13 @@ class SNN:
     def step(self, sensory_spikes):
         # (1) process sensory spikes
         for i in sensory_spikes:
-            for j in range(self.NUM_MOTOR):        
+            for j in range(self.N_MOTORS):        
                 self.accumulated_I[j] += self.syn_weights[i][j]
                 self.syn_fired[i] = 1
 
         # (2) update motor neuron states using Izhikevich model
         motor_spikes = []
-        for j in range(self.NUM_MOTOR):
+        for j in range(self.N_MOTORS):
             V = self.motor_state[j][0]
             W = self.motor_state[j][1]
             I = self.accumulated_I[j]
@@ -89,17 +89,17 @@ class SNN:
             self.motor_state[j][1] = W
         
         # (3) STDP weight update
-        delta_weights = np.zeros((self.NUM_SENSORY, self.NUM_MOTOR))
-        for j in range(motor_spikes):
-            for i in range(self.NUM_SENSORY):
+        delta_weights = np.zeros((self.N_SENSORS, self.N_MOTORS))
+        for j in motor_spikes:
+            for i in range(self.N_SENSORS):
                 if self.syn_fired[i] == 1:
                     delta_weights[i][j] += 0.5 # potentiation
                 else:
                     delta_weights[i][j] -= 0.25 # depression
 
         # apply weight updates with clipping
-        for i in range(self.NUM_SENSORY):
-            for j in range(self.NUM_MOTOR):
+        for j in motor_spikes:
+            for i in range(self.N_SENSORS):
                 self.syn_weights_new[i][j] = saturated_add(
                     self.syn_weights[i][j], delta_weights[i][j],
                     self.WEIGHT_MIN, self.WEIGHT_MAX)
