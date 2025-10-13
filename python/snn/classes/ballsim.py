@@ -110,13 +110,17 @@ class BallSim_Sensor:
         self.PERIOD2 = 4 # [time steps]
         self.PERIOD3 = 8 # [time steps]
         self.PLATE_SIDE = PLATE_SIDE # [m] the plate is square with this side length
+        
+        self.SENSORS_POS = (np.random.rand(N_SENSORS, 2) - 0.5) * PLATE_SIDE * 0.8
 
-        self.reset_random(N_SENSORS, PLATE_SIDE)
+        self.reset()
 
-    def reset_random(self, n_sensors, plate_side):
+    def get_sensors_pos(self):
+        return self.SENSORS_POS
+
+    def reset(self):
         self.counter = 0 # time step counter. For spike generation at different frequencies
-        self.SENSORS_POS = (np.random.rand(n_sensors, 2) - 0.5) * plate_side * 0.8
-
+        
     '''
         *** Sensor step ***
 
@@ -178,7 +182,7 @@ class BallSim(BallSimBase):
     def reset_random(self):
         super().reset_random()
         self.motor.reset()
-        self.sensor.reset_random(n_sensors=100, plate_side=self.PLATE_SIDE)
+        self.sensor.reset()
 
     def get_sensory_spikes(self):
         ball_pos_proj = self._get_ball_pos_proj()

@@ -15,8 +15,8 @@ class SimRunner:
         self.vis = BallSimVis(VIS_FPS=VIS_FPS)
 
     def update_snn(self):
-        SUCCESS_STEPS = 100
-        if self.sim.num_steps > 100:
+        SUCCESS_STEPS = 150
+        if self.sim.num_steps > SUCCESS_STEPS:
             self.snn.learn_stdp()
             print("STDP weight update performed.")
         else:
@@ -46,7 +46,7 @@ class SimRunner:
             cmd = self.vis.get_input()
             if cmd == "quit":
                 break
-            elif cmd == "reset":
+            elif cmd == "reset" or self.sim.num_steps > 1000:
                 self.update_snn()
                 self.sim.reset_random()
 

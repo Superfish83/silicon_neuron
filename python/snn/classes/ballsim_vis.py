@@ -22,11 +22,33 @@ class BallSimVis:
 
         # initialize variables related to simulation visualization
         self.sim_surf = pygame.Surface(self.SIM_SURF_SIZE)
+        self.sensor_surf = pygame.Surface(self.SIM_SURF_SIZE)
 
 
     def _get_simsurf_coord(self, pos, SIM_SCALE):
         tmp = pos[:2] * SIM_SCALE + np.array(self.SIM_SURF_SIZE) / 2
         return np.array([tmp[0], tmp[1], pos[2]])
+
+    ############### SONSOR SPIKE VISUALIZATION ###############
+    def _draw_sensor_surf(self, ballsim: BallSim, SIM_SCALE):
+        s_pos = ballsim.sensor.get_sensors_pos()
+        s_spike = [False] * len(s_pos)
+        for i in ballsim.get_sensory_spikes():
+            s_spike[i] = True
+
+        self.sensor_surf.fill((0,0,0))  # clear surface
+
+        SQUARE_SIZE = 0.8 * self.SIM_SURF_SIZE[0]
+        OFFSET = self.SIM_SURF_SIZE[0] * 0.1
+        pygame.draw.rect(self.sensor_surf, (50,50,50), (OFFSET, OFFSET, SQUARE_SIZE, SQUARE_SIZE))
+        
+        for i in range(len(s_pos)):
+            coord_2d = s_pos[i] * SIM_SCALE + np.array(self.SIM_SURF_SIZE) / 2
+            color = (255,100,100) if s_spike[i] else (100,100,100)
+            pygame.draw.circle(self.sensor_surf, color, coord_2d, 5)
+
+
+    ############### SIMULATION MAIN SURFACE DRAWING ###############
 
     def _draw_plate(self, ballsim: BallSim, SIM_SCALE):
         # plate corners in 3D
@@ -56,12 +78,14 @@ class BallSimVis:
                                     subdiv_color,
                                     subdiv_coords_2d, 0)
 
-    def _draw_time(self, ballsim: BallSim):
+    def _draw_texts(self, ballsim: BallSim):
         font = pygame.font.SysFont(None, 24)
         img = font.render(f"Simulation Time: {ballsim.time:.2f} s", True, (255,255,255))
         self.screen.blit(img, (10, 10))
         img = font.render(f"Steps: {ballsim.num_steps}", True, (255,255,255))
         self.screen.blit(img, (10, 30))
+        img = font.render(f"Sensor spikes fired: {len(ballsim.get_sensory_spikes())}", True, (255,255,255))
+        self.screen.blit(img, (340, 20))
 
 
     def _draw_ball(self, ballsim: BallSim, SIM_SCALE):
@@ -73,6 +97,10 @@ class BallSimVis:
         # draw ball
         pygame.draw.circle(self.sim_surf, ball_color, coord_2d, radius)
 
+
+
+    ############### MAIN DRAWING & INPUT HANDLING ###############
+
     def draw(self, ballsim: BallSim):
         self.screen.fill((50, 50, 50))  # clear screen
         self.sim_surf.fill((0,0,0))  # clear surface
@@ -80,11 +108,13 @@ class BallSimVis:
         SIM_SCALE = self.SIM_SURF_SIZE[0] / ballsim.PLATE_SIDE * 0.8
         self._draw_plate(ballsim, SIM_SCALE)
         self._draw_ball(ballsim, SIM_SCALE)
-        self._draw_time(ballsim)
-
+        self._draw_texts(ballsim)
         self.screen.blit(self.sim_surf, (20, 50))
-        pygame.display.flip()
 
+        self._draw_sensor_surf(ballsim, SIM_SCALE)
+        self.screen.blit(self.sensor_surf, (340, 50))
+
+        pygame.display.flip()
         self.clock.tick(50)  # limit to 50 FPS
 
     def get_input(self):
