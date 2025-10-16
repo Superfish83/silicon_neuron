@@ -43,7 +43,7 @@ class SNN:
         # neuron state variables
         self.hidden_state = np.zeros((self.N_HIDDEN, 2))  # hidden neuron states: [V, W]
         self.motor_state = np.zeros((self.N_MOTORS, 2))  # motor neuron states: [V, W]
-        
+
         self.accumulated_I_hidden = np.zeros(
             self.N_HIDDEN
         )  # accumulated input current for hidden neurons
@@ -53,12 +53,14 @@ class SNN:
 
         # synaptic weights for sensor -> hidden layer
         self.syn_weights_sensor_hidden = np.random.uniform(
-            self.WEIGHT_MIN, self.WEIGHT_MAX, (self.N_SENSORS, self.N_HIDDEN)
+            self.WEIGHT_MIN,
+            self.WEIGHT_MAX,
+            (self.N_SENSORS, self.N_HIDDEN),  # Temporary adjustment
         )
         self.syn_fired_sensor_hidden = np.zeros(
             (self.N_SENSORS, self.N_HIDDEN)
         )  # synaptic fired state (1 if fired, else 0)
-        
+
         # synaptic weights for hidden -> motor layer
         self.syn_weights_hidden_motor = np.random.uniform(
             self.WEIGHT_MIN, self.WEIGHT_MAX, (self.N_HIDDEN, self.N_MOTORS)
@@ -67,16 +69,16 @@ class SNN:
             (self.N_HIDDEN, self.N_MOTORS)
         )  # synaptic fired state (1 if fired, else 0)
 
-        self.syn_weights_sensor_hidden_new = np.copy(self.syn_weights_sensor_hidden)  # for STDP weight update
-        self.syn_weights_sensor_hidden_new_anti = np.copy(
-            self.syn_weights_sensor_hidden
-        )  # for anti-STDP weight update
-        
-        self.syn_weights_hidden_motor_new = np.copy(self.syn_weights_hidden_motor)  # for STDP weight update
-        self.syn_weights_hidden_motor_new_anti = np.copy(
-            self.syn_weights_hidden_motor
-        )  # for anti-STDP weight update
-        
+        # variables for STDP weight updates
+        self.syn_weights_sensor_hidden_new = np.zeros((self.N_SENSORS, self.N_HIDDEN))
+        self.syn_weights_hidden_motor_new = np.zeros((self.N_HIDDEN, self.N_MOTORS))
+        self.syn_weights_sensor_hidden_new_anti = np.zeros(
+            (self.N_SENSORS, self.N_HIDDEN)
+        )
+        self.syn_weights_hidden_motor_new_anti = np.zeros(
+            (self.N_HIDDEN, self.N_MOTORS)
+        )
+
         # Initialize NeuronProcessor
         self.neuron_processor = NeuronProcessor(
             hidden_state=self.hidden_state,
@@ -89,6 +91,8 @@ class SNN:
             syn_weights_hidden_motor=self.syn_weights_hidden_motor,
             syn_weights_sensor_hidden_new=self.syn_weights_sensor_hidden_new,
             syn_weights_hidden_motor_new=self.syn_weights_hidden_motor_new,
+            syn_weights_sensor_hidden_new_anti=self.syn_weights_sensor_hidden_new_anti,
+            syn_weights_hidden_motor_new_anti=self.syn_weights_hidden_motor_new_anti,
             N_SENSORS=self.N_SENSORS,
             N_HIDDEN=self.N_HIDDEN,
             N_MOTORS=self.N_MOTORS,
@@ -113,21 +117,25 @@ class SNN:
         # Queue-based processing using NeuronProcessor
         # This mimics FPGA FIFO behavior
         motor_spikes = self.neuron_processor.process(sensory_spikes)
-        
-        print(f"[SNN] Sensory spikes: {len(sensory_spikes)}, Motor spikes: {motor_spikes}")
-        
+
+        # print(
+        #     f"[SNN] Sensory spikes: {len(sensory_spikes)}, Motor spikes: {motor_spikes}"
+        # )
+
         return motor_spikes
 
     def learn_stdp(self):
-        self.syn_weights_sensor_hidden = np.clip(self.syn_weights_sensor_hidden_new, 0, 1)
-        self.syn_weights_sensor_hidden_new = np.copy(self.syn_weights_sensor_hidden)
-        
-        self.syn_weights_hidden_motor = np.clip(self.syn_weights_hidden_motor_new, 0, 1)
-        self.syn_weights_hidden_motor_new = np.copy(self.syn_weights_hidden_motor)
+        self.syn_weights_sensor_hidden = np.clip(
+            self.syn_weights_sensor_hidden_new, 0, 1
+        )
+        self.syn_weights_hidden_motor_new = np.clip(
+            self.syn_weights_hidden_motor_new, 0, 1
+        )
 
     def learn_anti_stdp(self):
-        self.syn_weights_sensor_hidden = np.clip(self.syn_weights_sensor_hidden_new_anti, 0, 1)
-        self.syn_weights_sensor_hidden_new_anti = np.copy(self.syn_weights_sensor_hidden)
-        
-        self.syn_weights_hidden_motor = np.clip(self.syn_weights_hidden_motor_new_anti, 0, 1)
-        self.syn_weights_hidden_motor_new_anti = np.copy(self.syn_weights_hidden_motor)
+        self.syn_weights_sensor_hidden = np.clip(
+            self.syn_weights_sensor_hidden_new_anti, 0, 1
+        )
+        self.syn_weights_hidden_motor = np.clip(
+            self.syn_weights_hidden_motor_new_anti, 0, 1
+        )

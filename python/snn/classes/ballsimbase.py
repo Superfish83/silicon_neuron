@@ -92,7 +92,7 @@ class BallSimBase:
         self,
         plate_tilt_range=(-0.3, 0.3),
         ball_pos_range=(-0.05, 0.05),
-        ball_v_range=(-1.5, 1.5),
+        ball_v_range=(-1.0, 1.0),
     ):
         # (1) randomly set plate_n
         tmp = np.random.uniform(plate_tilt_range[0], plate_tilt_range[1], size=2)

@@ -4,9 +4,14 @@ from classes.SNN import SNN
 
 
 class SimRunner:
-    def __init__(self, STEPS_PER_SEC, VIS_FPS, M, N_SENSORS=100, verbose=False):
+    def __init__(self, STEPS_PER_SEC, VIS_FPS, M, N_SENSORS=100, verbose=False, MU=0.1):
         # simulation
-        self.sim = BallSim(STEPS_PER_SEC=STEPS_PER_SEC, M=M, verbose=verbose)
+        self.sim = BallSim(
+            STEPS_PER_SEC=STEPS_PER_SEC,
+            M=M,
+            MU=MU,
+            verbose=verbose,
+        )
         self.sim.reset_random()
 
         # SNN controller
@@ -15,14 +20,19 @@ class SimRunner:
         # simulation visualizer
         self.vis = BallSimVis(VIS_FPS=VIS_FPS)
 
+        self.SUCCESS_STEPS = 120
+
     def update_snn(self):
-        SUCCESS_STEPS = 60
-        if self.sim.num_steps > SUCCESS_STEPS:
+        if self.sim.num_steps > self.SUCCESS_STEPS:
+            self.SUCCESS_STEPS += 2
             self.snn.learn_stdp()
             print("STDP weight update performed.")
         else:
+            self.SUCCESS_STEPS -= 1
             self.snn.learn_anti_stdp()
             print("Anti-STDP weight update performed.")
+        self.SUCCESS_STEPS = max(120, self.SUCCESS_STEPS)
+        print(f"Current SUCCESS_STEPS: {self.SUCCESS_STEPS}")
 
     def step(self):
         # (1) get sensory spikes from simulation
@@ -66,6 +76,7 @@ if __name__ == "__main__":
         STEPS_PER_SEC=100,
         VIS_FPS=30,
         M=0.01,
+        MU=0.01,
         N_SENSORS=100,
         verbose=True,
     )

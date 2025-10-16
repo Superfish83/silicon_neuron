@@ -181,9 +181,9 @@ class BallSim(BallSimBase):
     * M 범위: 0.001 ~ 0.03 [kg]
     """
 
-    def __init__(self, STEPS_PER_SEC, M, verbose=False):
+    def __init__(self, STEPS_PER_SEC, M, MU, verbose=False):
         # (0) Initialize parent class
-        super().__init__(STEPS_PER_SEC=STEPS_PER_SEC, M=M)
+        super().__init__(STEPS_PER_SEC=STEPS_PER_SEC, M=M, MU=MU)
 
         # (1) Initialize Motor and Sensor
         self.motor = BallSim_Motor(
