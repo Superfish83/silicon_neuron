@@ -22,7 +22,7 @@ class SNN:
     Neuron model: Izhikevich neuron model
     """
 
-    def __init__(self, STEPS_PER_SEC, N_SENSORS=100, N_HIDDEN=100, N_MOTORS=8):
+    def __init__(self, STEPS_PER_SEC, N_SENSORS=100, N_HIDDEN=4, N_MOTORS=8):
         self.STEPS_PER_SEC = STEPS_PER_SEC
         self.DT = 1.0 / STEPS_PER_SEC
         self.N_SENSORS = N_SENSORS
@@ -32,10 +32,10 @@ class SNN:
         self.V_RESET = -65.0  # reset potential after spike [mV]
         self.V_THRESH = 32.0  # spike threshold [mV]
         self.W_RESET = -15.0  # reset value of recovery variable after spike
-        self.W_ADD = 5.0  # increment of recovery variable after spike
+        self.W_ADD = 2.0  # increment of recovery variable after spike
 
-        self.WEIGHT_MIN = -2.0
-        self.WEIGHT_MAX = 2.0
+        self.WEIGHT_MIN = 0.0
+        self.WEIGHT_MAX = 64.0
 
         self.reset()
 
@@ -51,23 +51,26 @@ class SNN:
             self.N_MOTORS
         )  # accumulated input current for motor neurons
 
+        self.syn_fired_sensor_hidden = np.zeros(
+            (self.N_SENSORS, self.N_HIDDEN)
+        )  # synaptic fired state (1 if fired, else 0)
+        self.syn_fired_hidden_motor = np.zeros(
+            (self.N_HIDDEN, self.N_MOTORS)
+        )  # synaptic fired state (1 if fired, else 0)
+
         # synaptic weights for sensor -> hidden layer
         self.syn_weights_sensor_hidden = np.random.uniform(
             self.WEIGHT_MIN,
             self.WEIGHT_MAX,
             (self.N_SENSORS, self.N_HIDDEN),  # Temporary adjustment
         )
-        self.syn_fired_sensor_hidden = np.zeros(
-            (self.N_SENSORS, self.N_HIDDEN)
-        )  # synaptic fired state (1 if fired, else 0)
 
         # synaptic weights for hidden -> motor layer
         self.syn_weights_hidden_motor = np.random.uniform(
-            self.WEIGHT_MIN, self.WEIGHT_MAX, (self.N_HIDDEN, self.N_MOTORS)
-        )
-        self.syn_fired_hidden_motor = np.zeros(
+            self.WEIGHT_MIN,
+            self.WEIGHT_MAX,
             (self.N_HIDDEN, self.N_MOTORS)
-        )  # synaptic fired state (1 if fired, else 0)
+        )
 
         # variables for STDP weight updates
         self.syn_weights_sensor_hidden_new = np.zeros((self.N_SENSORS, self.N_HIDDEN))
@@ -116,13 +119,14 @@ class SNN:
     def step(self, sensory_spikes):
         # Queue-based processing using NeuronProcessor
         # This mimics FPGA FIFO behavior
-        motor_spikes = self.neuron_processor.process(sensory_spikes)
+        hidden_state, motor_state, hidden_spikes, motor_spikes\
+              = self.neuron_processor.process(sensory_spikes)
 
         # print(
         #     f"[SNN] Sensory spikes: {len(sensory_spikes)}, Motor spikes: {motor_spikes}"
         # )
 
-        return motor_spikes
+        return (hidden_state, motor_state, hidden_spikes, motor_spikes)
 
     def learn_stdp(self):
         self.syn_weights_sensor_hidden = np.clip(

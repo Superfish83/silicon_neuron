@@ -80,16 +80,22 @@ class NeuronProcessor:
         """
         Returns Izhikevich model motor spikes
         """
+
+        a = 0.1
+        b = 0.2
+        c = -65
+        d = 2
+
         dVdt = 0.04 * V**2 + 5 * V + 140 - W + I
-        dWdt = 0.02 * (0.2 * V - W)
+        dWdt = a * (b * V - W)
 
         V += dVdt * self.DT
         W += dWdt * self.DT
 
         activation = V >= self.V_THRESH
         if activation:
-            V = self.V_RESET
-            W += self.W_ADD
+            V = c
+            W += d
 
         return V, W, activation
 
@@ -141,15 +147,32 @@ class NeuronProcessor:
 
         for j in output_spikes:
             pre = syn_fired[:, j] == 1
-            delta = np.where(pre, 0.5, -0.25)  # A₊=0.5, A₋=0.25
+            delta_1 = np.where(pre, 4, -4)  # A₊=2, A₋=-1
+            delta_2 = np.where(pre, 1, -1)  # A₊=2, A₋=-1
 
-            w_plus = np.clip(weights[:, j] + delta, self.WEIGHT_MIN, self.WEIGHT_MAX)
-            w_minus = np.clip(weights[:, j] - delta, self.WEIGHT_MIN, self.WEIGHT_MAX)
+            w_plus = np.clip(weights[:, j] + delta_1, self.WEIGHT_MIN, self.WEIGHT_MAX)
+            w_minus = np.clip(weights[:, j] - delta_2, self.WEIGHT_MIN, self.WEIGHT_MAX)
 
             weights_new[:, j] = w_plus
             weights_new_anti[:, j] = w_minus
 
             syn_fired[:, j] = 0
+
+    def reset_neuron_states(self):  
+        # neuron state variables
+        self.hidden_state[:, :] = 0.0  # hidden neuron states: [V, W]
+        self.motor_state[:, :] = 0.0  # motor neuron states: [V, W]
+
+        self.hidden_state[:, 0] = self.V_RESET
+        self.motor_state[:, 0] = self.V_RESET
+        self.hidden_state[:, 1] = -15
+        self.motor_state[:, 1] = -15
+
+        self.accumulated_I_hidden[:] = 0.0  # accumulated input current for hidden neurons
+        self.accumulated_I_motor[:] = 0.0  # accumulated input current for motor neurons
+
+        self.syn_fired_sensor_hidden[:, :] = 0  # synaptic fired state (1 if fired, else 0)
+        self.syn_fired_hidden_motor[:, :] = 0  # synaptic fired state (1 if fired, else 0)
 
     def process(self, sensory_spikes):
         """
@@ -163,48 +186,51 @@ class NeuronProcessor:
         # Queue the sensory spikes for two-stage processing
         self.queue(sensory_spikes)
 
+        hidden_spikes = []
+        queued_spikes = []
+
         # Stage 1: Process sensor -> hidden layer
         if len(self.spike_queue) > 0:
             queued_spikes = self.dequeue()
-            hidden_spikes = self.process_layer(
-                input_spikes=queued_spikes,
-                neuron_state=self.hidden_state,
-                accumulated_I=self.accumulated_I_hidden,
-                weights=self.syn_weights_sensor_hidden,
-                syn_fired=self.syn_fired_sensor_hidden,
-                n_output=self.N_HIDDEN,
-            )
+        
+        hidden_spikes = self.process_layer(
+            input_spikes=queued_spikes,
+            neuron_state=self.hidden_state,
+            accumulated_I=self.accumulated_I_hidden,
+            weights=self.syn_weights_sensor_hidden,
+            syn_fired=self.syn_fired_sensor_hidden,
+            n_output=self.N_HIDDEN,
+        )
 
-            # STDP update for sensor->hidden weights
-            self.update_weights_stdp(
-                output_spikes=hidden_spikes,
-                syn_fired=self.syn_fired_sensor_hidden,
-                weights=self.syn_weights_sensor_hidden,
-                weights_new=self.syn_weights_sensor_hidden_new,
-                weights_new_anti=self.syn_weights_sensor_hidden_new_anti,
-                n_input=self.N_SENSORS,
-            )
-        else:
-            hidden_spikes = []
+        # STDP update for sensor->hidden weights
+        self.update_weights_stdp(
+            output_spikes=hidden_spikes,
+            syn_fired=self.syn_fired_sensor_hidden,
+            weights=self.syn_weights_sensor_hidden,
+            weights_new=self.syn_weights_sensor_hidden_new,
+            weights_new_anti=self.syn_weights_sensor_hidden_new_anti,
+            n_input=self.N_SENSORS,
+        )
 
         # Stage 2: Process hidden -> motor layer
-        motor_spikes = self.process_layer(
-            input_spikes=hidden_spikes,
-            neuron_state=self.motor_state,
-            accumulated_I=self.accumulated_I_motor,
-            weights=self.syn_weights_hidden_motor,
-            syn_fired=self.syn_fired_hidden_motor,
-            n_output=self.N_MOTORS,
-        )
+        # motor_spikes = self.process_layer(
+        #     input_spikes=hidden_spikes,
+        #     neuron_state=self.motor_state,
+        #     accumulated_I=self.accumulated_I_motor,
+        #     weights=self.syn_weights_hidden_motor,
+        #     syn_fired=self.syn_fired_hidden_motor,
+        #     n_output=self.N_MOTORS,
+        # )
 
-        # STDP update for hidden->motor weights
-        self.update_weights_stdp(
-            output_spikes=motor_spikes,
-            syn_fired=self.syn_fired_hidden_motor,
-            weights=self.syn_weights_hidden_motor,
-            weights_new=self.syn_weights_hidden_motor_new,
-            weights_new_anti=self.syn_weights_hidden_motor_new_anti,
-            n_input=self.N_HIDDEN,
-        )
-
-        return motor_spikes
+        # # STDP update for hidden->motor weights
+        # self.update_weights_stdp(
+        #     output_spikes=motor_spikes,
+        #     syn_fired=self.syn_fired_hidden_motor,
+        #     weights=self.syn_weights_hidden_motor,
+        #     weights_new=self.syn_weights_hidden_motor_new,
+        #     weights_new_anti=self.syn_weights_hidden_motor_new_anti,
+        #     n_input=self.N_HIDDEN,
+        # )
+        motor_spikes = []
+        
+        return self.hidden_state, self.motor_state, hidden_spikes, motor_spikes

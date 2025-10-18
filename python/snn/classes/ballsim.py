@@ -113,9 +113,9 @@ class BallSim_Sensor:
     """
 
     def __init__(self, N_SENSORS, PLATE_SIDE):
-        self.DIST1 = 0.01  # [m]
-        self.DIST2 = 0.02  # [m]
-        self.DIST3 = 0.05  # [m]
+        self.DIST1 = 0.02  # [m]
+        self.DIST2 = 0.04  # [m]
+        self.DIST3 = 0.08  # [m]
         self.PERIOD1 = 2  # [time steps]
         self.PERIOD2 = 4  # [time steps]
         self.PERIOD3 = 8  # [time steps]
@@ -200,7 +200,7 @@ class BallSim(BallSimBase):
         self.motor.reset()
         self.sensor.reset()
 
-    def get_sensory_spikes(self):
+    def sensor_step(self):
         ball_pos_proj = self._get_ball_pos_proj()
         sensor_spike_list = self.sensor.step(ball_pos_proj)
         return sensor_spike_list

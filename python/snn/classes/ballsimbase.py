@@ -84,15 +84,15 @@ class BallSimBase:
         self.ball_v = ball_v
         self.ball_w = ball_w
 
-        print("BallSim: reset complete.")
         if self.verbose:
+            print("BallSim: reset complete.")
             print(f"self.__dict__:\n{self.__dict__}")
 
     def reset_random(
         self,
         plate_tilt_range=(-0.3, 0.3),
         ball_pos_range=(-0.05, 0.05),
-        ball_v_range=(-1.0, 1.0),
+        ball_v_range=(-0.3, 0.3),
     ):
         # (1) randomly set plate_n
         tmp = np.random.uniform(plate_tilt_range[0], plate_tilt_range[1], size=2)
@@ -114,6 +114,9 @@ class BallSimBase:
         self.reset(
             plate_n=plate_n, ball_pos=ball_pos, ball_v=ball_v, ball_w=np.zeros(3)
         )
+
+    def get_ball_distfromcenter(self):
+        return np.linalg.norm(self.ball_pos[:2])
 
     def _get_ball_pos_proj(self):
         # project ball position onto the plate
@@ -223,6 +226,7 @@ class BallSimBase:
 
         if not self._is_ball_on_plate():
             self.isRunning = False
-            print(f"The ball has fallen off the plate!")
-            print(f"  At time {self.time:.3f}s (step #{self.num_steps})")
-            print(f"  Ball position: {self.ball_pos} [m]")
+            if self.verbose:
+                print(f"The ball has fallen off the plate!")
+                print(f"  At time {self.time:.3f}s (step #{self.num_steps})")
+                print(f"  Ball position: {self.ball_pos} [m]")
