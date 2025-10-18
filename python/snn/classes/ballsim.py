@@ -42,9 +42,9 @@ class BallSim_Motor:
                 [0, -pos, 0],  # -y
             ]
         )
-        self.K = 3  # spring constant [N/m]
-        self.D = 3  # damping coefficient [N/(m/s)]
-        self.IMPULSE = 0.05  # impulse when a spike is received [N*s]
+        self.K = 1  # spring constant [N/m]
+        self.D = 1  # damping coefficient [N/(m/s)]
+        self.IMPULSE = 0.1  # impulse when a spike is received [N*s]
         self.MAX_DEFLECTION = (
             0.2 * self.PLATE_SIDE
         )  # maximum deflection of the motor from the rest position [m]

@@ -99,12 +99,7 @@ class BallSimVis:
 
 
     ############### SURFACE #3: Hidden and Motor Spike Visualization ###############
-    def _draw_hidden_motor_surf(self, hidden_motor_states):
-        hidden_state = hidden_motor_states[0]
-        motor_state = hidden_motor_states[1]
-        hidden_spikes = hidden_motor_states[2]
-        motor_spikes = hidden_motor_states[3]
-
+    def _draw_motor_surf(self, motor_spikes, motor_states):
         self.hidden_motor_surf.fill((30,30,30))  # clear surface
         font = pygame.font.SysFont(None, 22)
 
@@ -114,41 +109,20 @@ class BallSimVis:
         self.hidden_motor_surf.blit(img, (130, 20))
 
 
+        # Motor neurons
+        motor_label = [ "+x",
+                        "-x",
+                        "+y",
+                        "-y"]
+        
         # Hidden neurons
-        N_HIDDEN = 4
-        for i in range(N_HIDDEN):
+        N_MOTORS = np.shape(motor_states)[0]
+        for i in range(N_MOTORS):
             x = 20
-            y = 60 + (200) / (N_HIDDEN - 1) * i
+            y = 60 + (200) / (N_MOTORS - 1) * i
 
             color1 = (80, 40, 80)
             color2 = (200, 100, 200)  # activated color
-            if hidden_spikes is None:
-                color = color1
-            elif i in hidden_spikes:
-                color = color2
-            else:
-                color = color1
-            pygame.draw.circle(self.hidden_motor_surf, color, (x, y), 8)
-
-            img = font.render(f"{hidden_state[i,0]:0.2f}mV", True, (255,255,255))
-            self.hidden_motor_surf.blit(img, (x + 20, y - 10))
-
-        # Motor neurons
-        motor_label = [ "Excit +x",
-                        "Excit -x",
-                        "Excit +y",
-                        "Excit -y",
-                        "Inhib +x",
-                        "Inhib -x",
-                        "Inhib +y",
-                        "Inhib -y"]
-        N_MOTORS = 8
-        for i in range(N_MOTORS):
-            x = 130
-            y = 60 + (200) / (N_HIDDEN - 1) * i
-
-            color1 = (50, 100, 50)
-            color2 = (100, 200, 100)  # activated color
             if motor_spikes is None:
                 color = color1
             elif i in motor_spikes:
@@ -156,12 +130,12 @@ class BallSimVis:
             else:
                 color = color1
             pygame.draw.circle(self.hidden_motor_surf, color, (x, y), 8)
+
+            img = font.render(f"{motor_states[i,0]:0.2f}mV", True, (255,255,255))
+            self.hidden_motor_surf.blit(img, (x + 20, y - 10))
             
-            # draw motor label
             img = font.render(motor_label[i], True, color)
             self.hidden_motor_surf.blit(img, (x + 90, y - 10))
-            img = font.render(f"{motor_state[i,0]:0.2f}mV", True, (255,255,255))
-            self.hidden_motor_surf.blit(img, (x + 20, y - 10))
 
 
     ############### Draw texts and aggregate the surfaces ###############
@@ -198,13 +172,13 @@ class BallSimVis:
 
     ############### MAIN DRAWING & INPUT HANDLING ###############
 
-    def draw(self, ballsim: BallSim, num_episodes, sensory_spikes, hidden_motor_states=[None, None, None, None]):
+    def draw(self, ballsim: BallSim, num_episodes, sensory_spikes, motor_spikes, motor_states):
         self.screen.fill((30, 30, 30))  # clear screen
         SIM_SCALE = self.SIM_SURF_SIZE[0] / ballsim.PLATE_SIDE * 0.8
         
         self._draw_sim_surf(ballsim, SIM_SCALE)
         self._draw_sensor_surf(ballsim, SIM_SCALE, sensory_spikes)
-        self._draw_hidden_motor_surf(hidden_motor_states)
+        self._draw_motor_surf(motor_spikes, motor_states)
 
         self._draw_surfs_to_screen()
         self._draw_texts(ballsim, num_episodes)

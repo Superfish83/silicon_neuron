@@ -91,8 +91,8 @@ class BallSimBase:
     def reset_random(
         self,
         plate_tilt_range=(-0.3, 0.3),
-        ball_pos_range=(-0.05, 0.05),
-        ball_v_range=(-0.3, 0.3),
+        ball_pos_range=(0,0),#(-0.05, 0.05),
+        ball_v_range=(0.3,0.3)#(-0.3, 0.3),
     ):
         # (1) randomly set plate_n
         tmp = np.random.uniform(plate_tilt_range[0], plate_tilt_range[1], size=2)
@@ -115,7 +115,7 @@ class BallSimBase:
             plate_n=plate_n, ball_pos=ball_pos, ball_v=ball_v, ball_w=np.zeros(3)
         )
 
-    def get_ball_distfromcenter(self):
+    def get_ball_dist_from_center(self):
         return np.linalg.norm(self.ball_pos[:2])
 
     def _get_ball_pos_proj(self):
